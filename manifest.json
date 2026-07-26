@@ -681,9 +681,9 @@
     {
       "id": "torrentio",
       "name": "🧲 Torrentio",
-      "description": "Movies and shows streaming",
+      "description": "Torrentio – Torrent streaming. Supports optional debrid services.",
       "version": "1.0.0",
-      "author": "Phisher",
+      "author": "Nuvio Team",
       "supportedTypes": ["movie", "tv"],
       "filename": "providers/torrentio.js",
       "enabled": true,
