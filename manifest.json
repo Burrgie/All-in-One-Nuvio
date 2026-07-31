@@ -187,6 +187,20 @@
       "contentLanguage": ["en", "hi", "ta", "te"]
     },
     {
+      "id": "animezey",
+      "name": "AnimeZeY",
+      "description": "Movies via AnimeZeY, indexed by TMDB",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": ["movie", "tv"],
+      "filename": "providers/animezey.js",
+      "enabled": true,
+      "hasSettings": true,
+      "formats": ["mp4", "mkv", "m3u8"],
+      "logo": "https://i.postimg.cc/RVTy2djk/ainimezey.png",
+      "contentLanguage": ["en", "pt"]
+    },
+    {
       "id": "desiflix",
       "name": "DesiFlix",
       "description": "Bollywood, Hollywood, and South Indian movies, in Dual Language",
@@ -353,20 +367,6 @@
       "formats": ["mkv", "m3u8"],
       "logo": "https://i.postimg.cc/sfLR6dMm/fibwatch.png",
       "contentLanguage": ["en", "hi"]
-    },
-    {
-      "id": "goatapi",
-      "name": "🐐 GoatAPI",
-      "description": "Movies via GoatAPI, indexed by TMDB",
-      "version": "1.0.0",
-      "author": "Aeyshx",
-      "supportedTypes": ["movie"],
-      "filename": "providers/goatapi.js",
-      "enabled": true,
-      "hasSettings": true,
-      "formats": ["mp4", "mkv", "m3u8"],
-      "logo": "https://i.postimg.cc/d1vkPZpY/goatapi.png",
-      "contentLanguage": ["en"]
     },
     {
       "id": "gramcinema",
