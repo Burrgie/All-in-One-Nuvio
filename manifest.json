@@ -375,7 +375,7 @@
       "version": "1.0.0",
       "author": "Nuvio Team",
       "supportedTypes": ["movie", "tv"],
-      "filename": "providers/gaoted.js",
+      "filename": "providers/goated.js",
       "enabled": true,
       "hasSettings": true,
       "formats": ["mkv", "mp4", "m3u8"],
