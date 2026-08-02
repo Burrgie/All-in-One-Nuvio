@@ -369,6 +369,20 @@
       "contentLanguage": ["en", "hi"]
     },
     {
+      "id": "goated",
+      "name": "🐐 Goated",
+      "description": "4K • 1080p Movies & Series in Multi Language",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": ["movie", "tv"],
+      "filename": "providers/gaoted.js",
+      "enabled": true,
+      "hasSettings": true,
+      "formats": ["mkv", "mp4", "m3u8"],
+      "logo": "https://i.postimg.cc/qqsfgS0F/goated.png",
+      "contentLanguage": ["en", "hi", "ru", "es"]
+    },
+    {
       "id": "gramcinema",
       "name": "GramCinema",
       "description": "Streams in Multi Lang from Bollywood.eu.org. Requires Cookie Token.",
@@ -649,20 +663,6 @@
       "formats": ["mp4", "mkv", "m3u8"],
       "logo": "https://i.postimg.cc/8c5XGzsx/showbox.png",
       "contentLanguage": ["en"]
-    },
-    {
-      "id": "toflix",
-      "name": "ToFlix",
-      "description": "Films & Séries in English and French",
-      "version": "1.0.0",
-      "author": "wooodyhood",
-      "supportedTypes": ["movie", "tv"],
-      "filename": "providers/toflix.js",
-      "enabled": true,
-      "hasSettings": true,
-      "formats": ["mp4", "m3u8"],
-      "logo": "https://i.postimg.cc/yNxJYqkv/toflix.png",
-      "contentLanguage": ["en", "fr"]
     },
     {
       "id": "topcartoons",
