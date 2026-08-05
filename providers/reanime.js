@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-06-27T19:07:29.654Z
+ * Generated: 2026-08-05T21:01:41.027Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -130,6 +130,28 @@ function getTmdbInfo(tmdbId, mediaType) {
     }
   });
 }
+function getAnilistInfo(alId) {
+  return __async(this, null, function* () {
+    var _a, _b, _c, _d;
+    const query = "query($id:Int){Media(id:$id){id title{english romaji} startDate{year}}}";
+    try {
+      const json = yield fetchJson(ANILIST_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, variables: { id: parseInt(alId, 10) } })
+      });
+      const media = (_a = json.data) == null ? void 0 : _a.Media;
+      if (!media)
+        return { title: "", year: null };
+      return {
+        title: ((_b = media.title) == null ? void 0 : _b.english) || ((_c = media.title) == null ? void 0 : _c.romaji) || "",
+        year: ((_d = media.startDate) == null ? void 0 : _d.year) || null
+      };
+    } catch (e) {
+      return { title: "", year: null };
+    }
+  });
+}
 function getSyncInfo(id, mediaType, season, episode) {
   return __async(this, null, function* () {
     const isImdb = typeof id === "string" && id.indexOf("tt") === 0;
@@ -160,13 +182,10 @@ function getSyncInfo(id, mediaType, season, episode) {
         return { imdbId: id, releaseDate: info.date, episodeTitle: info.title, dayIndex: info.dayIndex, episode };
       throw new Error("Could not find release date on Cinemata");
     }
-    const tmdbBase = `https://api.themoviedb.org/3/${mediaType === "movie" ? "movie" : "tv"}/${id}`;
-    const [details, base] = yield Promise.all([
-      fetchJson(tmdbBase + (mediaType === "movie" ? "" : "/external_ids") + `?api_key=${TMDB_API_KEY}`),
-      fetchJson(tmdbBase + `?api_key=${TMDB_API_KEY}`)
-    ]);
-    let imdbId = details.imdb_id || null;
-    const title = base.name || base.title || null;
+    const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === "movie" ? "movie" : "tv"}/${id}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`;
+    const details = yield fetchJson(tmdbUrl);
+    let imdbId = details.external_ids && details.external_ids.imdb_id || details.imdb_id || null;
+    const title = details.name || details.title || null;
     if (!imdbId) {
       try {
         const armData = yield fetchJson(`${ARM_BASE}/themoviedb?id=${id}`);
@@ -317,6 +336,7 @@ function collectSlugsFromHtml(html) {
 function searchReanimeAnime(query, year, targetAnilistId = null) {
   return __async(this, null, function* () {
     const endpoints = [
+      `/api/v1/search?q=${encodeURIComponent(query)}&limit=36`,
       `/api/search?q=${encodeURIComponent(query)}`,
       `/api/anime/search?q=${encodeURIComponent(query)}`,
       `/api/search/anime?q=${encodeURIComponent(query)}`,
@@ -329,19 +349,21 @@ function searchReanimeAnime(query, year, targetAnilistId = null) {
         const text = yield fetchText(endpoint);
         if (text.trim().startsWith("{") || text.trim().startsWith("[")) {
           const json = JSON.parse(text);
-          const list = json.data || json.results || json.anime || json;
+          const list = json.results || json.data || json.anime || (Array.isArray(json) ? json : null);
           if (Array.isArray(list)) {
             list.forEach((item) => {
-              var _a, _b, _c, _d;
-              const slug = item.anime_id || item.slug || item.id || item.url;
-              const cleanSlug = String(slug).replace(/-[a-z0-9]{6}$/, "");
-              if (cleanSlug) {
+              var _a, _b, _c;
+              const rawSlug = item.anime_id || item.slug || item.id || item.url;
+              if (rawSlug) {
+                const cleanSlug = String(rawSlug).replace(/-[a-z0-9]{6}$/, "");
+                const rawTitle = typeof item.title === "object" ? ((_a = item.title) == null ? void 0 : _a.english) || ((_b = item.title) == null ? void 0 : _b.romaji) || ((_c = item.title) == null ? void 0 : _c.native) || cleanSlug : item.title || item.name || cleanSlug;
                 const alId = extractAnilistId(item);
                 candidates.push({
-                  slug: cleanSlug,
-                  title: ((_a = item.title) == null ? void 0 : _a.english) || ((_b = item.title) == null ? void 0 : _b.romaji) || item.title || item.name || cleanSlug,
+                  slug: String(rawSlug),
+                  cleanSlug,
+                  title: rawTitle,
                   anilistId: alId,
-                  score: scoreCandidate(((_c = item.title) == null ? void 0 : _c.english) || ((_d = item.title) == null ? void 0 : _d.romaji) || item.title || item.name || cleanSlug, query, year, targetAnilistId, alId)
+                  score: scoreCandidate(rawTitle, query, year, targetAnilistId, alId)
                 });
               }
             });
@@ -396,17 +418,18 @@ function fetchEpisodeSourcesApi(slug, episodeNumber, language, anilistId) {
   return __async(this, null, function* () {
     const endpoints = [
       anilistId ? `/api/flix/${anilistId}/${episodeNumber}` : null,
-      `/api/sources/${slug}/${episodeNumber}?lang=${language}`,
-      `/api/episode/sources/${slug}/${episodeNumber}?lang=${language}`,
-      `/api/anime/${slug}/episodes/${episodeNumber}/sources?lang=${language}`,
-      `/api/watch/${slug}?ep=${episodeNumber}&lang=${language}`
+      slug ? `/api/v1/anime/${slug}/episodes` : null,
+      slug ? `/api/sources/${slug}/${episodeNumber}?lang=${language}` : null,
+      slug ? `/api/episode/sources/${slug}/${episodeNumber}?lang=${language}` : null,
+      slug ? `/api/watch/${slug}?ep=${episodeNumber}&lang=${language}` : null
     ].filter(Boolean);
     for (const endpoint of endpoints) {
       try {
         const json = yield fetchJson(endpoint);
         if (Array.isArray(json.servers)) {
-          const urls2 = json.servers.filter((server) => !language || server.dataType === language).map((server) => server.dataLink).filter(Boolean);
-          return [...new Set(urls2)];
+          const urls2 = json.servers.filter((server) => !language || !server.dataType || server.dataType === language).map((server) => server.dataLink).filter(Boolean);
+          if (urls2.length > 0)
+            return [...new Set(urls2)];
         }
         const text = JSON.stringify(json);
         const urls = extractDirectFlixUrls(text);
@@ -420,13 +443,25 @@ function fetchEpisodeSourcesApi(slug, episodeNumber, language, anilistId) {
 }
 function getFlixEmbeds(slug, episodeNumber, language, anilistId) {
   return __async(this, null, function* () {
-    const watchPath = `/watch/${slug}?ep=${episodeNumber}&lang=${language}`;
-    const html = yield fetchText(watchPath);
-    const direct = extractDirectFlixUrls(html);
-    if (direct.length > 0)
-      return { watchUrl: absolutize(watchPath), embeds: direct };
-    const apiUrls = yield fetchEpisodeSourcesApi(slug, episodeNumber, language, anilistId);
-    return { watchUrl: absolutize(watchPath), embeds: apiUrls };
+    const watchPath = `/watch/${slug || "anime"}?ep=${episodeNumber}&lang=${language}`;
+    if (anilistId) {
+      const apiUrls = yield fetchEpisodeSourcesApi(slug, episodeNumber, language, anilistId);
+      if (apiUrls.length > 0) {
+        return { watchUrl: absolutize(watchPath), embeds: apiUrls };
+      }
+    }
+    if (slug) {
+      try {
+        const html = yield fetchText(watchPath);
+        const direct = extractDirectFlixUrls(html);
+        if (direct.length > 0)
+          return { watchUrl: absolutize(watchPath), embeds: direct };
+      } catch (_) {
+      }
+      const apiUrls = yield fetchEpisodeSourcesApi(slug, episodeNumber, language, anilistId);
+      return { watchUrl: absolutize(watchPath), embeds: apiUrls };
+    }
+    return { watchUrl: absolutize(watchPath), embeds: [] };
   });
 }
 
@@ -1022,39 +1057,81 @@ function getStreams(tmdbId, mediaType = "tv", season = null, episode = null) {
       let searchYear = null;
       if (typeof tmdbId === "string" && tmdbId.indexOf("anilist:") === 0) {
         alId = tmdbId.split(":")[1];
-        const tmdb = yield getTmdbInfo(alId, mediaType);
-        searchTitle = tmdb.title;
-        searchYear = tmdb.year;
       } else {
         console.log(`[Reanime] Resolving sync info for TMDB ${tmdbId}...`);
-        const syncInfo = yield getSyncInfo(tmdbId, mediaType, season, episodeNumber);
-        searchTitle = syncInfo.title;
-        const syncResult = yield resolveByDate(syncInfo.releaseDate, syncInfo.title, episodeNumber, syncInfo.episodeTitle, syncInfo.dayIndex);
-        if (syncResult && syncResult.alId) {
-          alId = String(syncResult.alId);
-          episodeNumber = syncResult.episode;
-          searchTitle = syncResult.title;
-          console.log(`[Reanime] Verified AniList ID: ${alId}, Episode: ${episodeNumber}`);
-        } else {
-          console.warn(`[Reanime] Could not verify AniList ID via air-date. Falling back to basic search.`);
-          const tmdb = yield getTmdbInfo(tmdbId, mediaType);
-          searchTitle = tmdb.title;
-          searchYear = tmdb.year;
+        try {
+          const syncInfo = yield getSyncInfo(tmdbId, mediaType, season, episodeNumber);
+          searchTitle = syncInfo.title;
+          const syncResult = yield resolveByDate(syncInfo.releaseDate, syncInfo.title, episodeNumber, syncInfo.episodeTitle, syncInfo.dayIndex);
+          if (syncResult && syncResult.alId) {
+            alId = String(syncResult.alId);
+            episodeNumber = syncResult.episode;
+            searchTitle = syncResult.title;
+            console.log(`[Reanime] Verified AniList ID: ${alId}, Episode: ${episodeNumber}`);
+          }
+        } catch (syncErr) {
+          console.warn(`[Reanime] Sync info failed: ${syncErr.message}. Falling back to basic search.`);
+        }
+        if (!alId && !searchTitle) {
+          try {
+            const tmdb = yield getTmdbInfo(tmdbId, mediaType);
+            searchTitle = tmdb.title;
+            searchYear = tmdb.year;
+          } catch (_) {
+          }
         }
       }
-      const anime = yield searchReanimeAnime(searchTitle, searchYear, alId);
-      if (!anime || !anime.slug)
+      const embedsByLang = {};
+      if (alId) {
+        for (const lang of ["sub", "dub"]) {
+          try {
+            const res = yield getFlixEmbeds(null, episodeNumber, lang, alId);
+            if (res.embeds && res.embeds.length > 0) {
+              embedsByLang[lang] = res;
+            }
+          } catch (_) {
+          }
+        }
+      }
+      if (Object.keys(embedsByLang).length === 0) {
+        if (!searchTitle && alId) {
+          const alInfo = yield getAnilistInfo(alId);
+          searchTitle = alInfo.title;
+          searchYear = alInfo.year;
+        }
+        if (searchTitle) {
+          const anime = yield searchReanimeAnime(searchTitle, searchYear, alId);
+          if (anime) {
+            const slug = anime.slug;
+            const finalAlId = alId || anime.anilistId;
+            for (const lang of ["sub", "dub"]) {
+              try {
+                const res = yield getFlixEmbeds(slug, episodeNumber, lang, finalAlId);
+                if (res.embeds && res.embeds.length > 0) {
+                  embedsByLang[lang] = res;
+                }
+              } catch (_) {
+              }
+            }
+          }
+        }
+      }
+      if (Object.keys(embedsByLang).length === 0)
         return [];
-      const languages = ["sub", "dub"];
       const streams = [];
-      for (const language of languages) {
-        const { watchUrl, embeds } = yield getFlixEmbeds(anime.slug, episodeNumber, language, alId || anime.anilistId);
+      for (const language of ["sub", "dub"]) {
+        const embedInfo = embedsByLang[language];
+        if (!embedInfo || !embedInfo.embeds)
+          continue;
+        const watchUrl = embedInfo.watchUrl;
+        const embeds = embedInfo.embeds;
         for (let i = 0; i < embeds.length; i++) {
           try {
             console.log(`[Reanime] Extracting locally: ${embeds[i]}`);
             const extracted = yield extractFlixCloud(embeds[i], watchUrl);
             console.log(`[Reanime] Successfully extracted: ${extracted.url}`);
-            const streamTitle = mediaType === "movie" ? `${searchTitle} (${language.toUpperCase()})` : `${searchTitle} - Episode ${episodeNumber} (${language.toUpperCase()})`;
+            const displayTitle = searchTitle || extracted.title || "Anime";
+            const streamTitle = mediaType === "movie" ? `${displayTitle} (${language.toUpperCase()})` : `${displayTitle} - Episode ${episodeNumber} (${language.toUpperCase()})`;
             streams.push({
               name: `Reanime ${language.toUpperCase()} HD-${i + 1}`,
               title: streamTitle,

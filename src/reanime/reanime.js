@@ -52,6 +52,25 @@ export async function getTmdbInfo(tmdbId, mediaType) {
     }
 }
 
+export async function getAnilistInfo(alId) {
+    const query = 'query($id:Int){Media(id:$id){id title{english romaji} startDate{year}}}';
+    try {
+        const json = await fetchJson(ANILIST_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, variables: { id: parseInt(alId, 10) } })
+        });
+        const media = json.data?.Media;
+        if (!media) return { title: "", year: null };
+        return {
+            title: media.title?.english || media.title?.romaji || "",
+            year: media.startDate?.year || null
+        };
+    } catch (e) {
+        return { title: "", year: null };
+    }
+}
+
 // --- AnimeKai Search Logic Port ---
 
 export async function getSyncInfo(id, mediaType, season, episode) {
@@ -85,14 +104,11 @@ export async function getSyncInfo(id, mediaType, season, episode) {
         throw new Error('Could not find release date on Cinemata');
     }
 
-    const tmdbBase = `https://api.themoviedb.org/3/${mediaType === 'movie' ? 'movie' : 'tv'}/${id}`;
-    const [details, base] = await Promise.all([
-        fetchJson(tmdbBase + (mediaType === 'movie' ? '' : '/external_ids') + `?api_key=${TMDB_API_KEY}`),
-        fetchJson(tmdbBase + `?api_key=${TMDB_API_KEY}`)
-    ]);
+    const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === 'movie' ? 'movie' : 'tv'}/${id}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`;
+    const details = await fetchJson(tmdbUrl);
 
-    let imdbId = details.imdb_id || null;
-    const title = base.name || base.title || null;
+    let imdbId = (details.external_ids && details.external_ids.imdb_id) || details.imdb_id || null;
+    const title = details.name || details.title || null;
 
     if (!imdbId) {
         try {
@@ -248,6 +264,7 @@ function collectSlugsFromHtml(html) {
 
 export async function searchReanimeAnime(query, year, targetAnilistId = null) {
     const endpoints = [
+        `/api/v1/search?q=${encodeURIComponent(query)}&limit=36`,
         `/api/search?q=${encodeURIComponent(query)}`,
         `/api/anime/search?q=${encodeURIComponent(query)}`,
         `/api/search/anime?q=${encodeURIComponent(query)}`,
@@ -261,18 +278,22 @@ export async function searchReanimeAnime(query, year, targetAnilistId = null) {
             const text = await fetchText(endpoint);
             if (text.trim().startsWith("{") || text.trim().startsWith("[")) {
                 const json = JSON.parse(text);
-                const list = json.data || json.results || json.anime || json;
+                const list = json.results || json.data || json.anime || (Array.isArray(json) ? json : null);
                 if (Array.isArray(list)) {
                     list.forEach(item => {
-                        const slug = item.anime_id || item.slug || item.id || item.url;
-                        const cleanSlug = String(slug).replace(/-[a-z0-9]{6}$/, '');
-                        if (cleanSlug) {
+                        const rawSlug = item.anime_id || item.slug || item.id || item.url;
+                        if (rawSlug) {
+                            const cleanSlug = String(rawSlug).replace(/-[a-z0-9]{6}$/, '');
+                            const rawTitle = typeof item.title === 'object'
+                                ? (item.title?.english || item.title?.romaji || item.title?.native || cleanSlug)
+                                : (item.title || item.name || cleanSlug);
                             const alId = extractAnilistId(item);
                             candidates.push({
-                                slug: cleanSlug,
-                                title: item.title?.english || item.title?.romaji || item.title || item.name || cleanSlug,
+                                slug: String(rawSlug),
+                                cleanSlug: cleanSlug,
+                                title: rawTitle,
                                 anilistId: alId,
-                                score: scoreCandidate(item.title?.english || item.title?.romaji || item.title || item.name || cleanSlug, query, year, targetAnilistId, alId)
+                                score: scoreCandidate(rawTitle, query, year, targetAnilistId, alId)
                             });
                         }
                     });
@@ -332,10 +353,10 @@ function extractDirectFlixUrls(html) {
 async function fetchEpisodeSourcesApi(slug, episodeNumber, language, anilistId) {
     const endpoints = [
         anilistId ? `/api/flix/${anilistId}/${episodeNumber}` : null,
-        `/api/sources/${slug}/${episodeNumber}?lang=${language}`,
-        `/api/episode/sources/${slug}/${episodeNumber}?lang=${language}`,
-        `/api/anime/${slug}/episodes/${episodeNumber}/sources?lang=${language}`,
-        `/api/watch/${slug}?ep=${episodeNumber}&lang=${language}`
+        slug ? `/api/v1/anime/${slug}/episodes` : null,
+        slug ? `/api/sources/${slug}/${episodeNumber}?lang=${language}` : null,
+        slug ? `/api/episode/sources/${slug}/${episodeNumber}?lang=${language}` : null,
+        slug ? `/api/watch/${slug}?ep=${episodeNumber}&lang=${language}` : null
     ].filter(Boolean);
 
     for (const endpoint of endpoints) {
@@ -343,10 +364,10 @@ async function fetchEpisodeSourcesApi(slug, episodeNumber, language, anilistId) 
             const json = await fetchJson(endpoint);
             if (Array.isArray(json.servers)) {
                 const urls = json.servers
-                    .filter(server => !language || server.dataType === language)
+                    .filter(server => !language || !server.dataType || server.dataType === language)
                     .map(server => server.dataLink)
                     .filter(Boolean);
-                return [...new Set(urls)];
+                if (urls.length > 0) return [...new Set(urls)];
             }
 
             const text = JSON.stringify(json);
@@ -358,11 +379,25 @@ async function fetchEpisodeSourcesApi(slug, episodeNumber, language, anilistId) 
 }
 
 export async function getFlixEmbeds(slug, episodeNumber, language, anilistId) {
-    const watchPath = `/watch/${slug}?ep=${episodeNumber}&lang=${language}`;
-    const html = await fetchText(watchPath);
-    const direct = extractDirectFlixUrls(html);
-    if (direct.length > 0) return { watchUrl: absolutize(watchPath), embeds: direct };
+    const watchPath = `/watch/${slug || 'anime'}?ep=${episodeNumber}&lang=${language}`;
 
-    const apiUrls = await fetchEpisodeSourcesApi(slug, episodeNumber, language, anilistId);
-    return { watchUrl: absolutize(watchPath), embeds: apiUrls };
+    if (anilistId) {
+        const apiUrls = await fetchEpisodeSourcesApi(slug, episodeNumber, language, anilistId);
+        if (apiUrls.length > 0) {
+            return { watchUrl: absolutize(watchPath), embeds: apiUrls };
+        }
+    }
+
+    if (slug) {
+        try {
+            const html = await fetchText(watchPath);
+            const direct = extractDirectFlixUrls(html);
+            if (direct.length > 0) return { watchUrl: absolutize(watchPath), embeds: direct };
+        } catch (_) {}
+
+        const apiUrls = await fetchEpisodeSourcesApi(slug, episodeNumber, language, anilistId);
+        return { watchUrl: absolutize(watchPath), embeds: apiUrls };
+    }
+
+    return { watchUrl: absolutize(watchPath), embeds: [] };
 }
