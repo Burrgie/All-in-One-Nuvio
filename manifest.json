@@ -525,20 +525,6 @@
       "contentLanguage": ["hi", "en"]
     },
     {
-      "id": "moviesmod",
-      "name": "MoviesMod",
-      "description": "Movie and TV show streams from MoviesMod with multiple quality options",
-      "version": "1.0.0",
-      "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv"],
-      "filename": "providers/moviesmod.js",
-      "enabled": true,
-      "hasSettings": true,
-      "formats": ["mp4", "m3u8", "mkv"],
-      "logo": "https://i.postimg.cc/YqWDJtWW/moviesmod.png",
-      "contentLanguage": ["en"]
-    },
-    {
       "id": "movies4u",
       "name": "Movies4u",
       "description": "Hollywood, Bollywood movies including web series, & Hindi dubbed movies in HD quality",
@@ -802,6 +788,20 @@
       "hasSettings": true,
       "formats": ["mp4", "m3u8"],
       "logo": "https://i.postimg.cc/0Qp8PSx5/vidfast.png",
+      "contentLanguage": ["en"]
+    },
+    {
+      "id": "vidlove",
+      "name": "❤️ VidLove",
+      "description": "Movie and TV show streams from MovieBox, LookMovie, VidnNest etc",
+      "version": "1.0.0",
+      "author": "Jeff",
+      "supportedTypes": ["movie", "tv"],
+      "filename": "providers/vidlove.js",
+      "enabled": true,
+      "hasSettings": false,
+      "formats": ["mp4", "m3u8", "mkv"],
+      "logo": "https://i.postimg.cc/ZRjQytBY/vidlove.png",
       "contentLanguage": ["en"]
     },
     {
