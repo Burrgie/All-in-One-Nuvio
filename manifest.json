@@ -570,7 +570,7 @@
       "id": "netmirror",
       "name": "NetMirror",
       "description": "Netflix | Prime | Disney",
-      "version": "1.0.1",
+      "version": "1.0.0",
       "author": "Dustincos",
       "supportedTypes": ["movie", "tv"],
       "filename": "providers/netmirror.js",
